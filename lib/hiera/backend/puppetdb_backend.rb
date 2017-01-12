@@ -47,6 +47,40 @@ class Hiera
           end
         end
       end
+
+      def lookup_eg(key, scope, order_override, resolution_type)
+        return nil if key.end_with? "::_nodequerywithformat"
+
+        Hiera.debug("Looking up #{key} in PuppetDB backend")
+
+        if nodequerywithformat = Backend.lookup(key + "::_nodequerywithformat", nil, scope, order_override, :priority)
+          Hiera.debug("Found nodequerywithformat #{nodequerywithformat.inspect}")
+
+          # Support specifying the query in a few different ways
+          if nodequerywithformat.is_a? Hash
+            query = nodequerywithformat['query']
+            fact = nodequerywithformat['fact']
+            print_format = nodequerywithformat['format']
+#          elsif nodequerywithformat.is_a? Array
+#            query, fact = *nodequerywithformat
+#          else
+#            query = nodequerywithformat.to_s
+          end
+
+          how_many = print_format.scan('%s').length
+          
+          if fact then
+            query = @puppetdb.parse_query query, :facts if query.is_a? String
+            facts = @puppetdb.facts([fact], query).each_value.collect { |facts| facts[fact] }.sort
+            facts.map {|fact| print_format % ([fact] * how_many)}
+          else
+            query = @puppetdb.parse_query query, :nodes if query.is_a? String
+            nodes = @puppetdb.query(:nodes, query).collect { |n| n['name'] }
+            nodes.map {|node| print_format % ([node] * how_many)}
+          end
+        end
+      end
+
     end
   end
 end
